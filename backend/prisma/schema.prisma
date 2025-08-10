@@ -1,0 +1,126 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(uuid())
+  fullName        String
+  username        String   @unique
+  email           String   @unique
+  passwordHash    String?
+  emailVerifiedAt DateTime?
+  googleId        String?  @unique
+  githubId        String?  @unique
+  role            UserRole @default(USER)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  sessions        Session[]
+  emailTokens     EmailToken[]
+  balanceAccount  BalanceAccount?
+  payments        Payment[]
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  refreshHash String
+  userAgent   String?
+  ipHash      String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model EmailToken {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      TokenType
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([type, expiresAt])
+}
+
+enum TokenType {
+  VERIFY
+  RESET
+}
+
+model BalanceAccount {
+  // 1–1 ke User: pakai userId sebagai PK
+  userId       String  @id
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balanceIDR   Int     @default(0)
+  updatedAt    DateTime @updatedAt
+
+  // Back-relation ke ledger dengan nama relasi eksplisit
+  ledger       BalanceLedger[] @relation("AccountLedger")
+}
+
+model BalanceLedger {
+  id            String         @id @default(uuid())
+  // Relasi ke BalanceAccount lewat userId account (bukan langsung ke User)
+  accountUserId String
+  account       BalanceAccount @relation("AccountLedger", fields: [accountUserId], references: [userId], onDelete: Cascade)
+
+  amountIDR     Int
+  kind          LedgerKind
+  reference     Json?
+  createdAt     DateTime       @default(now())
+
+  @@index([accountUserId])
+  @@index([kind, createdAt])
+}
+
+enum LedgerKind {
+  TOPUP
+  ADJUST
+  REFUND
+  DEBIT
+}
+
+model Payment {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    String        @default("xendit")
+  orderId    String         @unique
+  grossIDR   Int
+  status     PaymentStatus  @default(PENDING)
+  method     String?
+  raw        Json?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([status, createdAt])
+}
+
+enum PaymentStatus {
+  PENDING
+  SETTLEMENT
+  CANCEL
+  FAIL
+  EXPIRE
+}

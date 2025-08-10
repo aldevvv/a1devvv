@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+:root {
+  /* Light Mode Colors - Clean Professional with Neon Blue */
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #f8f9fa;
+  --card-foreground: #1a1a1a;
+  --primary: #00bcd4;
+  --primary-foreground: #ffffff;
+  --secondary: #6b7280;
+  --secondary-foreground: #1a1a1a;
+  --accent: #f3f4f6;
+  --accent-foreground: #1a1a1a;
+  --border: #e5e7eb;
+  --input: #f9fafb;
+  --ring: #00bcd4;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --neon-blue: #00bcd4;
+}
+
+[data-theme="dark"] {
+  /* Dark Mode Colors - Dark + Neon Blue Only */
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #1a1a1a;
+  --card-foreground: #ffffff;
+  --primary: #00bcd4;
+  --primary-foreground: #0f0f0f;
+  --secondary: #666666;
+  --secondary-foreground: #ffffff;
+  --accent: #262626;
+  --accent-foreground: #ffffff;
+  --border: #333333;
+  --input: #1a1a1a;
+  --ring: #00bcd4;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --neon-blue: #00bcd4;
+  --dark-surface: #1a1a1a;
+  --dark-elevated: #262626;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-neon-blue: var(--neon-blue);
+  --color-dark-surface: var(--dark-surface);
+  --color-dark-elevated: var(--dark-elevated);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Inter, system-ui, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Clean subtle glow for neon blue in dark mode only */
+[data-theme="dark"] .neon-accent {
+  color: var(--neon-blue);
+}
+
+[data-theme="dark"] .neon-glow-subtle {
+  box-shadow: 0 0 10px rgba(0, 188, 212, 0.3);
+}
+
+/* Logo Marquee Animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-reverse {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee-reverse {
+  animation: marquee-reverse 30s linear infinite;
+}
+
+.animate-marquee-slow {
+  animation: marquee 60s linear infinite;
+}
+
+.animate-marquee-fast {
+  animation: marquee 20s linear infinite;
+}
+
+.animate-marquee-reverse-slow {
+  animation: marquee-reverse 60s linear infinite;
+}
+
+.animate-marquee-reverse-fast {
+  animation: marquee-reverse 20s linear infinite;
+}
+
+.animate-marquee-paused {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-marquee-reverse,
+  .animate-marquee-slow,
+  .animate-marquee-fast,
+  .animate-marquee-reverse-slow,
+  .animate-marquee-reverse-fast {
+    animation: none;
+  }
+}
