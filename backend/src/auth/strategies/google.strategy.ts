@@ -32,19 +32,31 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     done: VerifyCallback,
   ): Promise<any> {
     try {
-      const { id, name, emails } = profile;
+      const { id, name, emails, photos } = profile;
       const email = emails[0].value;
       const fullName = `${name.givenName} ${name.familyName}`.trim();
+      
+      // Extract profile picture URL with better fallbacks
+      let profileImage: string | undefined = undefined;
+      if (photos && photos.length > 0 && photos[0].value) {
+        profileImage = photos[0].value;
+      } else if (profile._json?.picture) {
+        profileImage = profile._json.picture;
+      }
+      
+      // OAuth profile processing completed
       
       const user = await this.authService.findOrCreateOAuthUser({
         provider: 'google',
         providerId: id,
         email,
         fullName,
+        profileImage,
       });
       
       done(null, user);
     } catch (error) {
+      console.error('Google OAuth validation error:', error);
       done(error, false);
     }
   }

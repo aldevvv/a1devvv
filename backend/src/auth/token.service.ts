@@ -12,10 +12,14 @@ export class TokenService {
     });
   }
 
-  signRefresh(payload: object) {
+  signRefresh(payload: object, rememberMe = false) {
+    const expiresIn = rememberMe 
+      ? process.env.JWT_REFRESH_EXPIRES_REMEMBER ?? '30d'
+      : process.env.JWT_REFRESH_EXPIRES ?? '7d';
+    
     return this.jwt.signAsync(payload, {
       secret: process.env.JWT_REFRESH_SECRET!,
-      expiresIn: process.env.JWT_REFRESH_EXPIRES ?? '7d',
+      expiresIn,
     });
   }
 
@@ -36,13 +40,17 @@ export class TokenService {
       // domain: '.a1dev.id', // uncomment saat prod (FE & BE beda subdomain)
     };
   }
-  cookieOptionsRefresh() {
+  cookieOptionsRefresh(rememberMe = false) {
+    const maxAge = rememberMe 
+      ? 30 * 24 * 60 * 60 * 1000  // 30 days for remember me
+      : 7 * 24 * 60 * 60 * 1000;  // 7 days for regular login
+    
     return {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
       path: '/',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge,
       // domain: '.a1dev.id',
     };
   }

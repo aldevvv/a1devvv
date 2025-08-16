@@ -10,23 +10,31 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  fullName        String
-  username        String   @unique
-  email           String   @unique
-  passwordHash    String?
-  emailVerifiedAt DateTime?
-  googleId        String?  @unique
-  githubId        String?  @unique
-  role            UserRole @default(USER)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                      String   @id @default(uuid())
+  fullName                String
+  username                String   @unique
+  email                   String   @unique
+  passwordHash            String?
+  emailVerifiedAt         DateTime?
+  googleId                String?  @unique
+  githubId                String?  @unique
+  profileImage            String?
+  newEmail                String?
+  emailChangeToken        String?
+  emailChangeTokenExpiry  DateTime?
+  role                    UserRole @default(USER)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   // Relations
   sessions        Session[]
   emailTokens     EmailToken[]
   balanceAccount  BalanceAccount?
   payments        Payment[]
+  products        Product[]
+  wishlists       Wishlist[]
+  cartItems       Cart[]
+  orders          Order[]
 }
 
 enum UserRole {
@@ -41,6 +49,7 @@ model Session {
   refreshHash String
   userAgent   String?
   ipHash      String?
+  rememberMe  Boolean  @default(false)
   expiresAt   DateTime
   revokedAt   DateTime?
   createdAt   DateTime @default(now())
@@ -110,6 +119,7 @@ model Payment {
   status     PaymentStatus  @default(PENDING)
   method     String?
   raw        Json?
+  order      Order?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 
@@ -119,8 +129,279 @@ model Payment {
 
 enum PaymentStatus {
   PENDING
-  SETTLEMENT
+  SETTLED
   CANCEL
   FAIL
   EXPIRE
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String?
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  products    Product[]
+  promoCodes  PromoCodeCategory[]
+}
+
+model Product {
+  id            String          @id @default(uuid())
+  slug          String          @unique
+  title         String
+  summary       String?
+  description   String?
+  priceIDR      Int
+  thumbnailUrl  String
+  status        ProductStatus   @default(DRAFT)
+  type          ProductType     @default(DIGITAL)
+  fulfillment   FulfillmentMode @default(INSTANT)
+  productKind   ProductKind     @default(KEYS)
+  stockType     StockType       @default(STOCK_BASED)
+  deliveryCfg   Json?           // Store items, links, or file URLs
+  userId        String?         // Owner of the product
+  user          User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  category      Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  salePriceIDR  Int?
+  salePercent   Int?
+  saleStartAt   DateTime?
+  saleEndAt     DateTime?
+  
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  // Relations
+  promoCodes      PromoCodeProduct[]
+  wishlists       Wishlist[]
+  cartItems       Cart[]
+  deliveries      ProductDelivery[]
+  
+  @@index([productKind])
+  @@index([stockType])
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum ProductType {
+  DIGITAL
+  SERVICE
+}
+
+enum FulfillmentMode {
+  INSTANT
+  MANUAL
+}
+
+enum ProductKind {
+  KEYS           // API Keys, License Keys
+  SOURCE_CODE    // Source Code files
+  ACCESS_LINK    // Group links, access links
+  DIGITAL_ACCOUNT // Premium accounts, subscription accounts
+}
+
+enum StockType {
+  UNLIMITED    // Same item sent to all buyers (source code)
+  STOCK_BASED  // Items based on available stock
+}
+
+model PromoCode {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  kind            PromoKind
+  value           Int
+  startAt         DateTime?
+  endAt           DateTime?
+  minSubtotalIDR  Int?
+  maxDiscountIDR  Int?
+  usageLimit      Int?
+  perUserLimit    Int?
+  appliesTo       PromoScope
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  categories      PromoCodeCategory[]
+  products        PromoCodeProduct[]
+  redemptions     PromoRedemption[]
+}
+
+model PromoCodeCategory {
+  promoCodeId String
+  categoryId  String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@id([promoCodeId, categoryId])
+}
+
+model PromoCodeProduct {
+  promoCodeId String
+  productId   String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@id([promoCodeId, productId])
+}
+
+model PromoRedemption {
+  id          String    @id @default(uuid())
+  promoCodeId String
+  userId      String
+  orderId     String
+  usedAt      DateTime  @default(now())
+  audit       Json?
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+}
+
+enum PromoKind {
+  PERCENT
+  FIXED
+}
+
+enum PromoScope {
+  ORDER
+  CATEGORY
+  PRODUCT
+}
+
+// Wishlist model for users to save their favorite products
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, productId]) // Ensure a user can't add same product twice
+  @@index([userId])
+  @@index([productId])
+}
+
+// Cart model for shopping cart functionality
+model Cart {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, productId]) // Ensure a user can't add same product twice
+  @@index([userId])
+  @@index([productId])
+}
+
+// Order model for purchase history
+model Order {
+  id            String   @id @default(uuid())
+  orderId       String   @unique
+  userId        String
+  totalIDR      Int
+  status        String   // PENDING, PAID, FAILED, CANCELLED, REFUNDED
+  paymentMethod String   // BALANCE, XENDIT
+  metadata      Json?    // Store product details, promo info, etc.
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment       Payment? @relation(fields: [paymentId], references: [id])
+  paymentId     String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([orderId])
+  @@index([status])
+}
+
+// Product Delivery tracking
+model ProductDelivery {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderId     String
+  userId      String
+  itemValue   String   // The delivered item (key, link, or file URL)
+  quantity    Int      @default(1)
+  deliveredAt DateTime @default(now())
+  
+  @@index([productId])
+  @@index([orderId])
+  @@index([userId])
+}
+
+// Audit Log for security and compliance
+model AuditLog {
+  id          String   @id @default(uuid())
+  operation   String   // Operation type: WALLET_TOPUP, WALLET_ADJUST, ADMIN_ACCESS, etc.
+  userId      String?  // User being affected
+  adminId     String?  // Admin performing the action
+  ipAddress   String?
+  userAgent   String?
+  amount      Int?     // For financial operations
+  metadata    Json?    // Additional operation details
+  status      String   @default("SUCCESS") // SUCCESS, FAILED, PENDING
+  timestamp   DateTime @default(now())
+  
+  @@index([operation])
+  @@index([userId])
+  @@index([adminId])
+  @@index([timestamp])
+}
+
+model ContactSubmission {
+  id          String             @id @default(uuid())
+  name        String
+  email       String
+  subject     String
+  category    ContactCategory
+  message     String
+  status      ContactStatus      @default(PENDING)
+  priority    ContactPriority    @default(NORMAL)
+  notes       String?            // Admin notes
+  respondedAt DateTime?
+  respondedBy String?            // Admin user ID who responded
+  ipAddress   String?            // For security tracking
+  userAgent   String?            // For security tracking
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  
+  @@index([status])
+  @@index([category])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([email])
+}
+
+enum ContactCategory {
+  GENERAL
+  TECHNICAL
+  BILLING
+  FEATURE
+  BUG
+  FEEDBACK
+  PARTNERSHIP
+  OTHER
+}
+
+enum ContactStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  SPAM
+}
+
+enum ContactPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
 }

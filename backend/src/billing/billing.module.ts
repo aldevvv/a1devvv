@@ -10,6 +10,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule, WalletModule, AuthModule],
   controllers: [BillingController],
   providers: [BillingService, XenditService],
-  exports: [BillingService],
+  exports: [BillingService, XenditService],
 })
 export class BillingModule {}

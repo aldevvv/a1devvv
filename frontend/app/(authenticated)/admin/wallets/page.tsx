@@ -2,82 +2,139 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
-import { useState, useEffect } from 'react';
-import { Wallet, Search, Filter, TrendingUp, TrendingDown, DollarSign, Users, Shield } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { 
+  Wallet, Search, TrendingUp, TrendingDown, DollarSign, Users, Shield, 
+  Plus, Edit, Eye, Clock, CheckCircle, XCircle, Upload, AlertCircle,
+  RefreshCw, FileText, CreditCard
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import api from '@/lib/api';
 
-// Mock wallet data
-const mockWallets = [
-  {
-    id: 1,
-    userId: 1,
-    userName: 'John Doe',
-    userEmail: 'john@example.com',
-    balance: 125000,
-    totalEarned: 200000,
-    totalWithdrawn: 75000,
-    lastTransaction: '2024-10-25T14:30:00Z',
-    status: 'active',
-    transactionCount: 15
-  },
-  {
-    id: 2,
-    userId: 2,
-    userName: 'Jane Smith',
-    userEmail: 'jane@example.com',
-    balance: 89000,
-    totalEarned: 150000,
-    totalWithdrawn: 61000,
-    lastTransaction: '2024-10-24T16:45:00Z',
-    status: 'active',
-    transactionCount: 12
-  },
-  {
-    id: 3,
-    userId: 3,
-    userName: 'Admin User',
-    userEmail: 'admin@a1dev.id',
-    balance: 0,
-    totalEarned: 0,
-    totalWithdrawn: 0,
-    lastTransaction: null,
-    status: 'active',
-    transactionCount: 0
-  },
-  {
-    id: 4,
-    userId: 4,
-    userName: 'Bob Wilson',
-    userEmail: 'bob@example.com',
-    balance: 45000,
-    totalEarned: 75000,
-    totalWithdrawn: 30000,
-    lastTransaction: '2024-10-23T11:15:00Z',
-    status: 'active',
-    transactionCount: 8
-  }
-];
+interface WalletData {
+  userId: string;
+  balanceIDR: number;
+  updatedAt: string;
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+    photoUrl?: string;
+    createdAt: string;
+  };
+  _count: {
+    ledger: number;
+  };
+  lastTransaction?: {
+    amountIDR: number;
+    kind: string;
+    createdAt: string;
+  };
+}
+
+interface WalletStats {
+  totalBalance: number;
+  totalUsers: number;
+  totalTopUps: {
+    amount: number;
+    count: number;
+  };
+  totalDebits: {
+    amount: number;
+    count: number;
+  };
+  todayTopUps: {
+    amount: number;
+    count: number;
+  };
+  pendingTopUps: number;
+}
+
+interface TopUpRequest {
+  id: string;
+  userId: string;
+  orderId: string;
+  grossIDR: number;
+  status: string;
+  method: string;
+  createdAt: string;
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+    photoUrl?: string;
+  };
+  proofUrl?: string;
+  uploadedAt?: string;
+  bankName?: string;
+  accountName?: string;
+  transferDate?: string;
+}
 
 export default function AdminWalletsPage() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
-  const [wallets, setWallets] = useState(mockWallets);
+  
+  const [wallets, setWallets] = useState<WalletData[]>([]);
+  const [stats, setStats] = useState<WalletStats | null>(null);
+  const [topUpRequests, setTopUpRequests] = useState<TopUpRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'wallets' | 'topup-requests'>('wallets');
+  const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const limit = 20;
 
-  // Check if user is admin
+  // Fetch wallets data
+  const fetchWallets = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.adminWallets.getAll(searchTerm, currentPage, limit);
+      setWallets(response.data);
+      setTotalPages(response.pagination.totalPages);
+    } catch (error) {
+      console.error('Failed to fetch wallets:', error);
+      toast.error('Failed to load wallets');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm, currentPage]);
+
+  // Fetch statistics
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await api.adminWallets.getStatistics();
+      setStats(response);
+    } catch (error) {
+      console.error('Failed to fetch statistics:', error);
+    }
+  }, []);
+
+  // Fetch top-up requests
+  const fetchTopUpRequests = useCallback(async () => {
+    try {
+      const response = await api.adminWallets.getTopUpRequests('PENDING');
+      setTopUpRequests(response.data);
+    } catch (error) {
+      console.error('Failed to fetch top-up requests:', error);
+    }
+  }, []);
+
   useEffect(() => {
     if (user && user.role !== 'ADMIN') {
       router.push('/dashboard');
+      return;
     }
-  }, [user, router]);
-
-  const filteredWallets = wallets.filter(wallet => {
-    const matchesSearch = wallet.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         wallet.userEmail.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+    
+    fetchWallets();
+    fetchStats();
+    fetchTopUpRequests();
+  }, [user, router, fetchWallets, fetchStats, fetchTopUpRequests]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -98,11 +155,28 @@ export default function AdminWalletsPage() {
     });
   };
 
-  // Calculate totals
-  const totalBalance = wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
-  const totalEarned = wallets.reduce((sum, wallet) => sum + wallet.totalEarned, 0);
-  const totalWithdrawn = wallets.reduce((sum, wallet) => sum + wallet.totalWithdrawn, 0);
-  const activeWallets = wallets.filter(wallet => wallet.balance > 0).length;
+
+  const handleApproveTopUp = async (paymentId: string) => {
+    try {
+      await api.adminWallets.approveTopUp(paymentId, { notes: 'Approved by admin' });
+      toast.success('Top-up approved');
+      fetchTopUpRequests();
+      fetchWallets();
+      fetchStats();
+    } catch (error) {
+      toast.error('Failed to approve top-up');
+    }
+  };
+
+  const handleRejectTopUp = async (paymentId: string, notes: string) => {
+    try {
+      await api.adminWallets.rejectTopUp(paymentId, { notes });
+      toast.success('Top-up rejected');
+      fetchTopUpRequests();
+    } catch (error) {
+      toast.error('Failed to reject top-up');
+    }
+  };
 
   if (user?.role !== 'ADMIN') {
     return (
@@ -123,212 +197,460 @@ export default function AdminWalletsPage() {
         <div>
           <h1 className="text-3xl font-bold">Wallet Management</h1>
           <p className="text-muted-foreground mt-1">
-            Monitor and manage all user wallets
+            Monitor and manage all user wallets and top-up requests
           </p>
         </div>
+        <button
+          onClick={() => {
+            fetchWallets();
+            fetchStats();
+            fetchTopUpRequests();
+          }}
+          className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-colors ${
+            theme === 'dark'
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+          }`}
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className={`p-6 rounded-lg border ${
-          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-        }`}>
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-            }`}>
-              <DollarSign className={`h-5 w-5 ${
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className={`p-4 rounded-lg border ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <DollarSign className={`h-4 w-4 ${
                 theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
               }`} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Balance</p>
-              <p className="text-2xl font-semibold">{formatCurrency(totalBalance)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={`p-6 rounded-lg border ${
-          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-        }`}>
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
-            }`}>
-              <TrendingUp className={`h-5 w-5 ${
-                theme === 'dark' ? 'text-green-400' : 'text-green-600'
-              }`} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Earned</p>
-              <p className="text-2xl font-semibold">{formatCurrency(totalEarned)}</p>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Balance</p>
+                <p className="text-lg font-semibold">{formatCurrency(stats.totalBalance)}</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className={`p-6 rounded-lg border ${
-          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-        }`}>
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
-            }`}>
-              <TrendingDown className={`h-5 w-5 ${
-                theme === 'dark' ? 'text-red-400' : 'text-red-600'
-              }`} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Withdrawn</p>
-              <p className="text-2xl font-semibold">{formatCurrency(totalWithdrawn)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={`p-6 rounded-lg border ${
-          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-        }`}>
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'
-            }`}>
-              <Wallet className={`h-5 w-5 ${
+          <div className={`p-4 rounded-lg border ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <Users className={`h-4 w-4 ${
                 theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
               }`} />
+              <div>
+                <p className="text-xs text-muted-foreground">Total Users</p>
+                <p className="text-lg font-semibold">{stats.totalUsers}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Active Wallets</p>
-              <p className="text-2xl font-semibold">{activeWallets}</p>
+          </div>
+
+          <div className={`p-4 rounded-lg border ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <TrendingUp className={`h-4 w-4 ${
+                theme === 'dark' ? 'text-green-400' : 'text-green-600'
+              }`} />
+              <div>
+                <p className="text-xs text-muted-foreground">Total Top-ups</p>
+                <p className="text-lg font-semibold">{formatCurrency(stats.totalTopUps.amount)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className={`p-4 rounded-lg border ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <TrendingDown className={`h-4 w-4 ${
+                theme === 'dark' ? 'text-red-400' : 'text-red-600'
+              }`} />
+              <div>
+                <p className="text-xs text-muted-foreground">Total Debits</p>
+                <p className="text-lg font-semibold">{formatCurrency(stats.totalDebits.amount)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className={`p-4 rounded-lg border ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <CreditCard className={`h-4 w-4 ${
+                theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'
+              }`} />
+              <div>
+                <p className="text-xs text-muted-foreground">Today's Top-ups</p>
+                <p className="text-lg font-semibold">{formatCurrency(stats.todayTopUps.amount)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className={`p-4 rounded-lg border ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center space-x-2">
+              <Clock className={`h-4 w-4 ${
+                theme === 'dark' ? 'text-orange-400' : 'text-orange-600'
+              }`} />
+              <div>
+                <p className="text-xs text-muted-foreground">Pending Requests</p>
+                <p className="text-lg font-semibold">{stats.pendingTopUps}</p>
+              </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex space-x-4 border-b">
+        <button
+          onClick={() => setActiveTab('wallets')}
+          className={`pb-2 px-1 font-medium transition-colors ${
+            activeTab === 'wallets'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Wallets
+        </button>
+        <button
+          onClick={() => setActiveTab('topup-requests')}
+          className={`pb-2 px-1 font-medium transition-colors relative ${
+            activeTab === 'topup-requests'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Top-up Requests
+          {stats && stats.pendingTopUps > 0 && (
+            <span className="absolute -top-1 -right-4 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              {stats.pendingTopUps}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Search */}
-      <div className={`p-6 rounded-lg border ${
-        theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-      }`}>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by user name or email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={`pl-10 pr-4 py-2 rounded-lg border w-full md:w-80 ${
-              theme === 'dark'
-                ? 'bg-background border-border text-foreground'
-                : 'bg-white border-gray-300 text-gray-900'
-            }`}
-          />
-        </div>
-      </div>
+      {/* Content based on active tab */}
+      {activeTab === 'wallets' ? (
+        <>
+          {/* Search */}
+          <div className={`p-4 rounded-lg border ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search by user name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`pl-10 pr-4 py-2 rounded-lg border w-full md:w-80 ${
+                  theme === 'dark'
+                    ? 'bg-background border-border text-foreground'
+                    : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              />
+            </div>
+          </div>
 
-      {/* Wallets Table */}
-      <div className={`rounded-lg border overflow-hidden ${
-        theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-      }`}>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className={`border-b ${
-              theme === 'dark' ? 'border-border bg-muted/50' : 'border-gray-200 bg-gray-50'
-            }`}>
-              <tr>
-                <th className="text-left p-4 font-semibold">User</th>
-                <th className="text-left p-4 font-semibold">Current Balance</th>
-                <th className="text-left p-4 font-semibold">Total Earned</th>
-                <th className="text-left p-4 font-semibold">Total Withdrawn</th>
-                <th className="text-left p-4 font-semibold">Transactions</th>
-                <th className="text-left p-4 font-semibold">Last Activity</th>
-                <th className="text-left p-4 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredWallets.map((wallet) => (
-                <tr key={wallet.id} className="hover:bg-muted/50">
-                  <td className="p-4">
-                    <div>
-                      <div className="font-medium">{wallet.userName}</div>
-                      <div className="text-sm text-muted-foreground">{wallet.userEmail}</div>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="font-semibold">{formatCurrency(wallet.balance)}</div>
-                  </td>
-                  <td className="p-4">
-                    <div className={`font-semibold ${
-                      theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                    }`}>
-                      {formatCurrency(wallet.totalEarned)}
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className={`font-semibold ${
-                      theme === 'dark' ? 'text-red-400' : 'text-red-600'
-                    }`}>
-                      {formatCurrency(wallet.totalWithdrawn)}
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        wallet.transactionCount > 10
-                          ? theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
-                          : wallet.transactionCount > 5
-                          ? theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
-                          : theme === 'dark' ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {wallet.transactionCount}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-sm text-muted-foreground">
-                    {formatDate(wallet.lastTransaction)}
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        wallet.status === 'active' ? 'bg-green-500' : 'bg-gray-500'
-                      }`}></div>
-                      <span className="text-sm capitalize">{wallet.status}</span>
-                    </div>
-                  </td>
+          {/* Wallets Table */}
+          <div className={`rounded-lg border overflow-hidden ${
+            theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+          }`}>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className={`border-b ${
+                  theme === 'dark' ? 'border-border bg-muted/50' : 'border-gray-200 bg-gray-50'
+                }`}>
+                  <tr>
+                    <th className="text-left p-4 font-semibold">User</th>
+                    <th className="text-left p-4 font-semibold">Balance</th>
+                    <th className="text-left p-4 font-semibold">Transactions</th>
+                    <th className="text-left p-4 font-semibold">Last Transaction</th>
+                    <th className="text-left p-4 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center">
+                        <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+                        <p>Loading wallets...</p>
+                      </td>
+                    </tr>
+                  ) : wallets.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center">
+                        <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                        <h3 className="text-lg font-semibold mb-2">No wallets found</h3>
+                        <p className="text-muted-foreground">Try adjusting your search criteria.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    wallets.map((wallet) => (
+                      <tr key={wallet.userId} className="hover:bg-muted/50">
+                        <td className="p-4">
+                          <div className="flex items-center space-x-3">
+                            {wallet.user.photoUrl ? (
+                              <img
+                                src={wallet.user.photoUrl}
+                                alt={wallet.user.fullName}
+                                className="h-10 w-10 rounded-full"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                                <Users className="h-5 w-5" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium">{wallet.user.fullName}</div>
+                              <div className="text-sm text-muted-foreground">{wallet.user.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="font-semibold">{formatCurrency(wallet.balanceIDR)}</div>
+                        </td>
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            wallet._count.ledger > 10
+                              ? theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
+                              : wallet._count.ledger > 5
+                              ? theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
+                              : theme === 'dark' ? 'bg-gray-900/30 text-gray-400' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {wallet._count.ledger}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          {wallet.lastTransaction ? (
+                            <div className="text-sm">
+                              <div className={`font-medium ${
+                                wallet.lastTransaction.kind === 'TOPUP' || wallet.lastTransaction.kind === 'ADJUST'
+                                  ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                                  : theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                              }`}>
+                                {wallet.lastTransaction.kind === 'TOPUP' ? '+' : wallet.lastTransaction.kind === 'DEBIT' ? '-' : ''}
+                                {formatCurrency(Math.abs(wallet.lastTransaction.amountIDR))}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {formatDate(wallet.lastTransaction.createdAt)}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">No transactions</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => router.push(`/admin/wallets/${wallet.userId}`)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                theme === 'dark'
+                                  ? 'hover:bg-gray-800 text-gray-400 hover:text-gray-300'
+                                  : 'hover:bg-gray-100 text-gray-600 hover:text-gray-700'
+                              }`}
+                              title="View Details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => router.push(`/admin/wallets/${wallet.userId}/topup`)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                theme === 'dark'
+                                  ? 'hover:bg-green-900/30 text-green-400 hover:text-green-300'
+                                  : 'hover:bg-green-100 text-green-600 hover:text-green-700'
+                              }`}
+                              title="Manual Top-up"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => router.push(`/admin/wallets/${wallet.userId}/adjust`)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                theme === 'dark'
+                                  ? 'hover:bg-blue-900/30 text-blue-400 hover:text-blue-300'
+                                  : 'hover:bg-blue-100 text-blue-600 hover:text-blue-700'
+                              }`}
+                              title="Adjust Balance"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1 rounded-lg ${
+                      currentPage === 1
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-1 rounded-lg ${
+                      currentPage === totalPages
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        /* Top-up Requests Tab */
+        <div className={`rounded-lg border overflow-hidden ${
+          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
+        }`}>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className={`border-b ${
+                theme === 'dark' ? 'border-border bg-muted/50' : 'border-gray-200 bg-gray-50'
+              }`}>
+                <tr>
+                  <th className="text-left p-4 font-semibold">User</th>
+                  <th className="text-left p-4 font-semibold">Amount</th>
+                  <th className="text-left p-4 font-semibold">Method</th>
+                  <th className="text-left p-4 font-semibold">Proof</th>
+                  <th className="text-left p-4 font-semibold">Date</th>
+                  <th className="text-left p-4 font-semibold">Status</th>
+                  <th className="text-left p-4 font-semibold">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {topUpRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center">
+                      <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold mb-2">No pending top-up requests</h3>
+                      <p className="text-muted-foreground">All top-up requests have been processed.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  topUpRequests.map((request) => (
+                    <tr key={request.id} className="hover:bg-muted/50">
+                      <td className="p-4">
+                        <div className="flex items-center space-x-3">
+                          {request.user.photoUrl ? (
+                            <img
+                              src={request.user.photoUrl}
+                              alt={request.user.fullName}
+                              className="h-10 w-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                              <Users className="h-5 w-5" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-medium">{request.user.fullName}</div>
+                            <div className="text-sm text-muted-foreground">{request.user.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="font-semibold">{formatCurrency(request.grossIDR)}</div>
+                      </td>
+                      <td className="p-4">
+                        <span className="text-sm capitalize">{request.method.replace('_', ' ')}</span>
+                      </td>
+                      <td className="p-4">
+                        {request.proofUrl ? (
+                          <a
+                            href={request.proofUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-flex items-center text-sm ${
+                              theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                            }`}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            View Proof
+                          </a>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">No proof</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-sm text-muted-foreground">
+                        {formatDate(request.createdAt)}
+                      </td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          request.status === 'PENDING'
+                            ? theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
+                            : request.status === 'SETTLED'
+                            ? theme === 'dark' ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
+                            : theme === 'dark' ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {request.status}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        {request.status === 'PENDING' && (
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleApproveTopUp(request.id)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                theme === 'dark'
+                                  ? 'hover:bg-green-900/30 text-green-400 hover:text-green-300'
+                                  : 'hover:bg-green-100 text-green-600 hover:text-green-700'
+                              }`}
+                              title="Approve"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const notes = prompt('Rejection reason:');
+                                if (notes) handleRejectTopUp(request.id, notes);
+                              }}
+                              className={`p-2 rounded-lg transition-colors ${
+                                theme === 'dark'
+                                  ? 'hover:bg-red-900/30 text-red-400 hover:text-red-300'
+                                  : 'hover:bg-red-100 text-red-600 hover:text-red-700'
+                              }`}
+                              title="Reject"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-        
-        {filteredWallets.length === 0 && (
-          <div className="p-8 text-center">
-            <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">No wallets found</h3>
-            <p className="text-muted-foreground">Try adjusting your search criteria.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Summary Card */}
-      <div className={`p-6 rounded-lg border ${
-        theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-      }`}>
-        <h3 className="text-lg font-semibold mb-4">Platform Summary</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center">
-            <div className="text-2xl font-bold mb-1">{formatCurrency(totalBalance)}</div>
-            <div className="text-sm text-muted-foreground">Total Platform Balance</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold mb-1">{wallets.length}</div>
-            <div className="text-sm text-muted-foreground">Total Wallets</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold mb-1">
-              {wallets.reduce((sum, wallet) => sum + wallet.transactionCount, 0)}
-            </div>
-            <div className="text-sm text-muted-foreground">Total Transactions</div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

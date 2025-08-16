@@ -11,6 +11,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { GitHubStrategy } from './strategies/github.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsernameGeneratorService } from './username-generator.service';
+import { TemplatesService } from '../admin/templates/templates.service';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { UsernameGeneratorService } from './username-generator.service';
     GitHubStrategy,
     JwtStrategy,
     UsernameGeneratorService,
+    TemplatesService,
   ],
-  exports: [AuthService, TokenService],
+  exports: [AuthService, TokenService, AccessTokenGuard],
 })
 export class AuthModule {}

@@ -6,9 +6,13 @@ import { TokenService } from './token.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsernameGeneratorService } from './username-generator.service';
+import { TemplatesService } from '../admin/templates/templates.service';
 
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const genRandomToken = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
+
+// Security constants
+const MAX_SESSIONS_PER_USER = 5;
 
 @Injectable()
 export class AuthService {
@@ -17,6 +21,7 @@ export class AuthService {
     private tokens: TokenService,
     private mail: EmailService,
     private usernameGenerator: UsernameGeneratorService,
+    private templates: TemplatesService,
   ) {}
 
   async register(fullName: string, username: string, email: string, password: string) {
@@ -48,11 +53,12 @@ export class AuthService {
     });
 
     const verifyUrl = `${process.env.API_URL}/auth/verify?token=${raw}`;
-    await this.mail.send(user.email, 'Verify your email', `
-      <p>Hi ${user.fullName},</p>
-      <p>Please verify your email by clicking the link below (valid 30 minutes):</p>
-      <p><a href="${verifyUrl}">${verifyUrl}</a></p>
-    `);
+    const emailTemplate = this.templates.generateEmailTemplate('verification', {
+      fullName: user.fullName,
+      url: verifyUrl,
+    });
+    
+    await this.mail.send(user.email, emailTemplate.subject, emailTemplate.html);
 
     return { id: user.id, email: user.email };
   }
@@ -62,18 +68,28 @@ export class AuthService {
     providerId: string;
     email: string;
     fullName: string;
+    profileImage?: string;
   }) {
-    const { provider, providerId, email, fullName } = data;
+    const { provider, providerId, email, fullName, profileImage } = data;
     const normalizedEmail = email.toLowerCase();
+
+    // OAuth user processing - sensitive data not logged for security
 
     // Check if user exists by provider ID
     let user = await this.prisma.user.findUnique({
-      where: provider === 'google' 
+      where: provider === 'google'
         ? { googleId: providerId }
         : { githubId: providerId },
     });
 
     if (user) {
+      // Always update profile image if we have one from OAuth (to keep it fresh)
+      if (profileImage) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { profileImage },
+        });
+      }
       return user;
     }
 
@@ -83,12 +99,18 @@ export class AuthService {
     });
 
     if (user) {
-      // Link OAuth account to existing user
+      // Link OAuth account to existing user and always update profile image if available
+      const updateData: any = provider === 'google'
+        ? { googleId: providerId }
+        : { githubId: providerId };
+      
+      if (profileImage) {
+        updateData.profileImage = profileImage;
+      }
+      
       user = await this.prisma.user.update({
         where: { id: user.id },
-        data: provider === 'google' 
-          ? { googleId: providerId }
-          : { githubId: providerId },
+        data: updateData,
       });
       return user;
     }
@@ -99,17 +121,22 @@ export class AuthService {
       normalizedEmail,
     );
 
+    // Creating new OAuth user
+
     user = await this.prisma.user.create({
       data: {
         fullName,
         username,
         email: normalizedEmail,
         emailVerifiedAt: new Date(), // OAuth emails are pre-verified
-        ...(provider === 'google' 
+        profileImage, // Add profile image from OAuth provider
+        ...(provider === 'google'
           ? { googleId: providerId }
           : { githubId: providerId }),
       },
     });
+
+    // New OAuth user created successfully
 
     // Create balance account
     await this.prisma.balanceAccount.create({
@@ -119,13 +146,19 @@ export class AuthService {
     return user;
   }
 
-  async createTokensForUser(userId: string, ua?: string, ip?: string) {
-    const accessToken = await this.tokens.signAccess({ sub: userId });
-    const refreshToken = await this.tokens.signRefresh({ sub: userId, ver: genRandomToken(8) });
+  async createTokensForUser(userId: string, rememberMe = false, ua?: string, ip?: string) {
+    // Enforce session limit before creating new session
+    await this.enforceSessionLimit(userId);
 
-    // store refresh (hash)
+    const accessToken = await this.tokens.signAccess({ sub: userId });
+    const refreshToken = await this.tokens.signRefresh({ sub: userId, ver: genRandomToken(8) }, rememberMe);
+
+    // store refresh (hash) with dynamic expiration based on rememberMe
     const refreshHash = sha256(refreshToken);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expirationTime = rememberMe 
+      ? 30 * 24 * 60 * 60 * 1000  // 30 days for remember me
+      : 7 * 24 * 60 * 60 * 1000;  // 7 days for regular login
+    const expiresAt = new Date(Date.now() + expirationTime);
 
     await this.prisma.session.create({
       data: {
@@ -133,6 +166,7 @@ export class AuthService {
         refreshHash,
         userAgent: ua,
         ipHash: ip ? sha256(ip) : null,
+        rememberMe,
         expiresAt,
       },
     });
@@ -161,7 +195,7 @@ export class AuthService {
     return { ok: true };
   }
 
-  async login(identifier: { email?: string; username?: string }, password: string, ua?: string, ip?: string) {
+  async login(identifier: { email?: string; username?: string }, password: string, rememberMe = false, ua?: string, ip?: string) {
     const where = identifier.email
       ? { email: identifier.email.toLowerCase() }
       : { username: identifier.username! };
@@ -172,13 +206,19 @@ export class AuthService {
     const ok = await argon2.verify(user.passwordHash, password);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
 
-    // issue tokens
+    // issue tokens with remember me support
     const accessToken = await this.tokens.signAccess({ sub: user.id });
-    const refreshToken = await this.tokens.signRefresh({ sub: user.id, ver: genRandomToken(8) });
+    const refreshToken = await this.tokens.signRefresh({ sub: user.id, ver: genRandomToken(8) }, rememberMe);
 
-    // store refresh (hash)
+    // Enforce session limit before creating new session
+    await this.enforceSessionLimit(user.id);
+
+    // store refresh (hash) with dynamic expiration based on rememberMe
     const refreshHash = sha256(refreshToken);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expirationTime = rememberMe 
+      ? 30 * 24 * 60 * 60 * 1000  // 30 days for remember me
+      : 7 * 24 * 60 * 60 * 1000;  // 7 days for regular login
+    const expiresAt = new Date(Date.now() + expirationTime);
 
     await this.prisma.session.create({
       data: {
@@ -186,6 +226,7 @@ export class AuthService {
         refreshHash,
         userAgent: ua,
         ipHash: ip ? sha256(ip) : null,
+        rememberMe,
         expiresAt,
       },
     });
@@ -204,11 +245,19 @@ export class AuthService {
     });
     if (!session) throw new UnauthorizedException('Session not found');
 
-    // rotate
+    // Preserve rememberMe setting from original session
+    const rememberMe = session.rememberMe;
+    
+    // rotate with same rememberMe setting
     const accessToken = await this.tokens.signAccess({ sub: session.userId });
-    const newRefresh = await this.tokens.signRefresh({ sub: session.userId, ver: genRandomToken(8) });
+    const newRefresh = await this.tokens.signRefresh({ sub: session.userId, ver: genRandomToken(8) }, rememberMe);
     const newHash = sha256(newRefresh);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    
+    // Calculate expiration based on rememberMe setting
+    const expirationTime = rememberMe 
+      ? 30 * 24 * 60 * 60 * 1000  // 30 days for remember me
+      : 7 * 24 * 60 * 60 * 1000;  // 7 days for regular login
+    const expiresAt = new Date(Date.now() + expirationTime);
 
     await this.prisma.$transaction([
       this.prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } }),
@@ -218,6 +267,7 @@ export class AuthService {
           refreshHash: newHash,
           userAgent: ua,
           ipHash: ip ? sha256(ip) : null,
+          rememberMe,
           expiresAt,
         },
       }),
@@ -249,11 +299,12 @@ export class AuthService {
     });
 
     const resetUrl = `${process.env.APP_URL}/reset-password?token=${raw}`;
-    await this.mail.send(user.email, 'Reset your password', `
-      <p>Hi ${user.fullName},</p>
-      <p>Click the link below to reset your password (valid 30 minutes):</p>
-      <p><a href="${resetUrl}">${resetUrl}</a></p>
-    `);
+    const emailTemplate = this.templates.generateEmailTemplate('reset-password', {
+      fullName: user.fullName,
+      url: resetUrl,
+    });
+    
+    await this.mail.send(user.email, emailTemplate.subject, emailTemplate.html);
     return { ok: true };
   }
 
@@ -277,5 +328,116 @@ export class AuthService {
     });
 
     return { ok: true };
+  }
+
+  /**
+   * Enforce session limit per user and revoke oldest sessions if needed
+   */
+  private async enforceSessionLimit(userId: string): Promise<void> {
+    const existingSessions = await this.prisma.session.findMany({
+      where: { 
+        userId, 
+        revokedAt: null, 
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true }
+    });
+
+    if (existingSessions.length >= MAX_SESSIONS_PER_USER) {
+      // Calculate how many sessions to revoke
+      const sessionsToRevoke = existingSessions.length - MAX_SESSIONS_PER_USER + 1;
+      const sessionIdsToRevoke = existingSessions
+        .slice(0, sessionsToRevoke)
+        .map(session => session.id);
+
+      // Revoke oldest sessions
+      await this.prisma.session.updateMany({
+        where: {
+          id: { in: sessionIdsToRevoke }
+        },
+        data: { revokedAt: new Date() }
+      });
+    }
+  }
+
+  /**
+   * Clean up expired sessions and email tokens
+   */
+  async cleanupExpiredData(): Promise<{ sessionsDeleted: number; tokensDeleted: number }> {
+    const now = new Date();
+
+    // Clean up expired sessions (including revoked ones older than 7 days)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const expiredSessions = await this.prisma.session.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lt: now } }, // Expired sessions
+          { 
+            revokedAt: { 
+              lt: sevenDaysAgo,
+              not: null 
+            } 
+          } // Revoked sessions older than 7 days
+        ]
+      }
+    });
+
+    // Clean up expired and used email tokens
+    const expiredTokens = await this.prisma.emailToken.deleteMany({
+      where: {
+        OR: [
+          { expiresAt: { lt: now } }, // Expired tokens
+          { usedAt: { not: null } }   // Used tokens
+        ]
+      }
+    });
+
+    return {
+      sessionsDeleted: expiredSessions.count,
+      tokensDeleted: expiredTokens.count
+    };
+  }
+
+  /**
+   * Get session statistics for monitoring
+   */
+  async getSessionStats(): Promise<{
+    totalActiveSessions: number;
+    expiredSessions: number;
+    revokedSessions: number;
+    sessionsPerUser: { userId: string; count: number }[];
+  }> {
+    const now = new Date();
+
+    const [activeSessions, expiredSessions, revokedSessions, sessionsPerUser] = await Promise.all([
+      this.prisma.session.count({
+        where: { revokedAt: null, expiresAt: { gt: now } }
+      }),
+      this.prisma.session.count({
+        where: { expiresAt: { lt: now } }
+      }),
+      this.prisma.session.count({
+        where: { revokedAt: { not: null } }
+      }),
+this.prisma.$queryRaw`
+        SELECT "userId", COUNT(*) as count
+        FROM "Session"
+        WHERE "revokedAt" IS NULL AND "expiresAt" > ${now}
+        GROUP BY "userId"
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+      `
+    ]);
+
+    return {
+      totalActiveSessions: activeSessions,
+      expiredSessions,
+      revokedSessions,
+      sessionsPerUser: (sessionsPerUser as any[]).map((item: any) => ({
+        userId: item.userId,
+        count: parseInt(item.count)
+      }))
+    };
   }
 }

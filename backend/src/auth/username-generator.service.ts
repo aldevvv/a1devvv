@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import slugify from 'slugify';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class UsernameGeneratorService {
@@ -26,9 +27,9 @@ export class UsernameGeneratorService {
       return baseUsername;
     }
     
-    // Try with random suffixes
-    for (let i = 0; i < 10; i++) {
-      const suffix = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+    // Try with random suffixes - increased attempts for better uniqueness
+    for (let i = 0; i < 50; i++) {
+      const suffix = Math.floor(Math.random() * 999999).toString().padStart(6, '0');
       const candidate = `${baseUsername}${suffix}`;
       
       if (await this.isUsernameAvailable(candidate)) {
@@ -36,9 +37,19 @@ export class UsernameGeneratorService {
       }
     }
     
-    // Fallback: use timestamp
-    const timestamp = Date.now().toString().slice(-6);
-    return `${baseUsername}${timestamp}`;
+    // Ultimate fallback: use crypto random + timestamp for 100% uniqueness
+    const cryptoRandom = crypto.randomBytes(4).toString('hex');
+    const timestamp = Date.now().toString().slice(-8);
+    const fallbackUsername = `${baseUsername}_${cryptoRandom}${timestamp}`;
+    
+    // Final safety check - this should never fail
+    if (await this.isUsernameAvailable(fallbackUsername)) {
+      return fallbackUsername;
+    }
+    
+    // Extremely rare case: add more entropy
+    const extraEntropy = crypto.randomBytes(8).toString('hex');
+    return `user_${extraEntropy}_${timestamp}`;
   }
   
   private sanitizeUsername(input: string): string {

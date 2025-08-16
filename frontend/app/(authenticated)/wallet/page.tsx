@@ -4,8 +4,9 @@ import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Wallet, Plus, ArrowUpRight, ArrowDownLeft, CreditCard, DollarSign, Loader2 } from 'lucide-react';
+import { Wallet, Plus, ArrowUpRight, ArrowDownLeft, CreditCard, DollarSign, Loader2, TrendingUp, Zap } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface WalletSummary {
   balanceIDR: number;
@@ -43,6 +44,18 @@ export default function WalletPage() {
       currency: 'IDR',
       minimumFractionDigits: 0
     }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Never';
+      }
+      return date.toLocaleDateString('en-US');
+    } catch (error) {
+      return 'Never';
+    }
   };
 
   const fetchWalletData = useCallback(async () => {
@@ -137,7 +150,7 @@ export default function WalletPage() {
       case 'REFUND':
         return 'Refund';
       case 'DEBIT':
-        return 'Debit Transaction';
+        return 'Marketplace Purchase';
       default:
         return 'Transaction';
     }
@@ -174,207 +187,286 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">My Wallet</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your earnings and transactions
-          </p>
-        </div>
-      </div>
+    <div className="space-y-4 relative">
+      {/* Futuristic background grid */}
+      <div className="fixed inset-0 bg-grid-pattern opacity-5 pointer-events-none"
+           style={{ backgroundSize: '30px 30px' }}></div>
 
-      {/* Wallet Balance Card */}
-      <div className={`p-6 rounded-xl border ${
+      {/* Compact Header with futuristic styling */}
+      <div className={`relative p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 ${
         theme === 'dark'
-          ? 'bg-gradient-to-br from-blue-900/20 to-purple-900/20 border-blue-800/30'
-          : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200'
+          ? 'bg-black border-neon-blue/20 shadow-lg shadow-neon-blue/10'
+          : 'bg-card/90 border-primary/20 shadow-lg'
       }`}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
-            <div className={`p-3 rounded-lg ${
-              theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-            }`}>
-              <Wallet className={`h-6 w-6 ${
-                theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-              }`} />
+            <div className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-neon-blue/20' : 'bg-primary/20'}`}>
+              <Wallet className={`h-5 w-5 ${theme === 'dark' ? 'text-neon-blue' : 'text-primary'}`} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Current Balance</h2>
-              <p className="text-sm text-muted-foreground">Available funds</p>
+              <h1 className="text-xl font-bold tracking-tight">Wallet Control Center</h1>
+              <p className="text-xs text-muted-foreground">
+                Manage your digital assets and transactions
+              </p>
             </div>
           </div>
-        </div>
-        
-        <div className="mb-6">
-          <div className="text-4xl font-bold mb-2">
-            {formatCurrency(walletSummary?.balanceIDR || 0)}
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Last updated: {walletSummary ? new Date(walletSummary.updatedAt).toLocaleDateString('id-ID') : 'Never'}
-          </div>
-        </div>
-
-        <div className="flex space-x-3">
-          <button
-            onClick={handleTopUp}
-            className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium transition-colors ${
-              theme === 'dark'
-                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            <Plus className="h-4 w-4" />
-            <span>Top Up</span>
-          </button>
-          
-          <button
-            onClick={handleWithdraw}
-            className={`flex-1 flex items-center justify-center space-x-2 py-3 px-4 rounded-lg font-medium border transition-colors ${
-              theme === 'dark'
-                ? 'border-gray-600 hover:bg-gray-800 text-gray-300'
-                : 'border-gray-300 hover:bg-gray-50 text-gray-700'
-            }`}
-          >
-            <ArrowUpRight className="h-4 w-4" />
-            <span>Withdraw</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className={`p-6 rounded-lg border ${
-          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-        }`}>
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
-            }`}>
-              <ArrowDownLeft className={`h-5 w-5 ${
-                theme === 'dark' ? 'text-green-400' : 'text-green-600'
-              }`} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Earned</p>
-              <p className="text-xl font-semibold">{formatCurrency(walletStatistics?.totalEarned || 0)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={`p-6 rounded-lg border ${
-          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-        }`}>
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
-            }`}>
-              <ArrowUpRight className={`h-5 w-5 ${
-                theme === 'dark' ? 'text-red-400' : 'text-red-600'
-              }`} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Withdrawn</p>
-              <p className="text-xl font-semibold">{formatCurrency(walletStatistics?.totalWithdrawn || 0)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={`p-6 rounded-lg border ${
-          theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-        }`}>
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${
-              theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-            }`}>
-              <CreditCard className={`h-5 w-5 ${
-                theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-              }`} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">This Month</p>
-              <p className="text-xl font-semibold">{formatCurrency(walletStatistics?.thisMonth || 0)}</p>
-            </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleTopUp}
+              className={`flex items-center px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
+                theme === 'dark'
+                  ? 'bg-neon-blue text-black hover:bg-neon-blue/90 shadow-lg shadow-neon-blue/25'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg'
+              }`}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Top Up
+            </button>
+            <button
+              onClick={handleWithdraw}
+              className={`flex items-center px-3 py-2 text-sm rounded-lg border transition-all duration-200 ${
+                theme === 'dark'
+                  ? 'border-border/50 hover:bg-card/80 text-muted-foreground'
+                  : 'border-gray-300 hover:bg-gray-50 text-gray-700'
+              }`}
+            >
+              <ArrowUpRight className="h-3 w-3 mr-1" />
+              Withdraw
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Transaction History */}
-      <div className={`rounded-lg border ${
-        theme === 'dark' ? 'bg-card border-border' : 'bg-white border-gray-200'
-      }`}>
-        <div className="p-6 border-b border-border">
-          <h3 className="text-lg font-semibold">Recent Transactions</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Your latest wallet activity
-          </p>
+      {/* Compact Balance & Stats Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        {/* Main Balance Card - Takes 2 columns */}
+        <div className={`lg:col-span-2 group p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] ${
+          theme === 'dark'
+            ? 'bg-black border-neon-blue/30 hover:border-neon-blue/50 hover:shadow-lg hover:shadow-neon-blue/20'
+            : 'bg-card/90 border-primary/30 hover:border-primary/50 hover:shadow-lg'
+        }`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <div className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-neon-blue/20' : 'bg-primary/20'}`}>
+                <Wallet className={`h-4 w-4 ${theme === 'dark' ? 'text-neon-blue' : 'text-primary'}`} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Current Balance</p>
+                <p className="text-xs text-muted-foreground">
+                  Updated: {walletSummary ? formatDate(walletSummary.updatedAt) : 'Never'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="mb-3">
+            <div className={`text-2xl font-bold ${theme === 'dark' ? 'text-neon-blue' : 'text-primary'}`}>
+              {formatCurrency(walletSummary?.balanceIDR || 0)}
+            </div>
+          </div>
+          <div className={`h-1 rounded-full ${theme === 'dark' ? 'bg-neon-blue/30' : 'bg-primary/30'}`}>
+            <div className={`h-1 rounded-full w-full animate-pulse ${theme === 'dark' ? 'bg-neon-blue' : 'bg-primary'}`}></div>
+          </div>
         </div>
-        
-        <div className="divide-y divide-border">
-          {ledgerHistory.length > 0 ? (
-            ledgerHistory.map((entry) => (
-              <div key={entry.id} className="p-6 flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className={`p-2 rounded-lg ${
-                    ['TOPUP', 'REFUND'].includes(entry.kind)
-                      ? theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'
-                      : entry.kind === 'DEBIT'
-                      ? theme === 'dark' ? 'bg-red-900/30' : 'bg-red-100'
-                      : theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'
-                  }`}>
-                    {getLedgerIcon(entry.kind)}
-                  </div>
-                  <div>
-                    <p className="font-medium">{getLedgerDescription(entry)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(entry.createdAt).toLocaleDateString('id-ID', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                  </div>
+
+        {/* Stats Cards */}
+        <div className={`group p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 hover:scale-105 ${
+          theme === 'dark'
+            ? 'bg-black border-green-500/20 hover:border-green-500/40 hover:shadow-lg hover:shadow-green-500/20'
+            : 'bg-card/90 border-green-200 hover:border-green-300 hover:shadow-lg'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Total Earned</p>
+              <p className="text-lg font-bold text-green-600">{formatCurrency(walletStatistics?.totalEarned || 0)}</p>
+            </div>
+            <div className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-green-500/20' : 'bg-green-100'}`}>
+              <ArrowDownLeft className="h-4 w-4 text-green-500" />
+            </div>
+          </div>
+          <div className={`h-1 rounded-full mt-2 ${theme === 'dark' ? 'bg-green-500/30' : 'bg-green-200'}`}>
+            <div className="h-1 bg-green-500 rounded-full w-3/4 animate-pulse"></div>
+          </div>
+        </div>
+
+        <div className={`group p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 hover:scale-105 ${
+          theme === 'dark'
+            ? 'bg-black border-blue-500/20 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/20'
+            : 'bg-card/90 border-blue-200 hover:border-blue-300 hover:shadow-lg'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">This Month</p>
+              <p className="text-lg font-bold text-blue-600">{formatCurrency(walletStatistics?.thisMonth || 0)}</p>
+            </div>
+            <div className={`p-2 rounded-lg ${theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+              <TrendingUp className="h-4 w-4 text-blue-500" />
+            </div>
+          </div>
+          <div className={`h-1 rounded-full mt-2 ${theme === 'dark' ? 'bg-blue-500/30' : 'bg-blue-200'}`}>
+            <div className="h-1 bg-blue-500 rounded-full w-1/2 animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Grid - More compact */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Left Column - Transaction History */}
+        <div className="xl:col-span-2 space-y-4">
+          <div className={`p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 ${
+            theme === 'dark'
+              ? 'bg-black border-border/50 hover:shadow-lg'
+              : 'bg-card/90 border-gray-200 hover:shadow-lg'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
+              <h3 className="text-sm font-semibold flex items-center">
+                <div className={`p-1 rounded ${theme === 'dark' ? 'bg-neon-blue/20' : 'bg-primary/20'} mr-2`}>
+                  <CreditCard className={`h-3 w-3 ${theme === 'dark' ? 'text-neon-blue' : 'text-primary'}`} />
                 </div>
-                
-                <div className="text-right">
-                  <p className={`font-semibold ${
-                    ['TOPUP', 'REFUND'].includes(entry.kind)
-                      ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                      : entry.kind === 'DEBIT'
-                      ? theme === 'dark' ? 'text-red-400' : 'text-red-600'
-                      : theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                  }`}>
-                    {['TOPUP', 'REFUND'].includes(entry.kind) ? '+' : entry.kind === 'DEBIT' ? '-' : ''}{formatCurrency(Math.abs(entry.amountIDR))}
-                  </p>
-                  <p className="text-sm text-muted-foreground capitalize">
-                    {entry.kind.toLowerCase()}
-                  </p>
+                Transaction History
+              </h3>
+            </div>
+            
+            {ledgerHistory.length > 0 ? (
+              <div className="space-y-2">
+                {ledgerHistory.slice(0, 6).map((entry) => (
+                  <motion.div
+                    key={entry.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-3 rounded-lg border transition-all duration-200 hover:scale-[1.02] ${
+                      theme === 'dark' ? 'border-border/50 hover:border-neon-blue/30' : 'border-gray-200 hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-1.5 rounded-lg ${
+                            ['TOPUP', 'REFUND'].includes(entry.kind)
+                              ? theme === 'dark' ? 'bg-green-500/20' : 'bg-green-100'
+                              : entry.kind === 'DEBIT'
+                              ? theme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'
+                              : theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+                          }`}>
+                            {getLedgerIcon(entry.kind)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{getLedgerDescription(entry)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(entry.createdAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-2">
+                        <p className={`text-sm font-medium ${
+                          ['TOPUP', 'REFUND'].includes(entry.kind)
+                            ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                            : entry.kind === 'DEBIT'
+                            ? theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                            : theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
+                          {['TOPUP', 'REFUND'].includes(entry.kind) ? '+' : entry.kind === 'DEBIT' ? '-' : ''}{formatCurrency(Math.abs(entry.amountIDR))}
+                        </p>
+                        <p className={`text-xs uppercase font-medium ${
+                          ['TOPUP', 'REFUND'].includes(entry.kind) ? 'text-green-500' :
+                          entry.kind === 'DEBIT' ? 'text-red-500' : 'text-blue-500'
+                        }`}>
+                          {entry.kind}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+                {ledgerHistory.length > 6 && (
+                  <div className="text-center pt-2">
+                    <button
+                      onClick={() => router.push('/wallet/transactions')}
+                      className={`text-xs px-3 py-1 rounded-md transition-colors ${
+                        theme === 'dark'
+                          ? 'text-neon-blue hover:bg-neon-blue/10'
+                          : 'text-primary hover:bg-primary/10'
+                      }`}
+                    >
+                      View {ledgerHistory.length - 6} more transactions →
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className={`inline-flex p-3 rounded-full mb-3 ${
+                  theme === 'dark' ? 'bg-neon-blue/20' : 'bg-primary/20'
+                }`}>
+                  <Wallet className={`h-6 w-6 ${theme === 'dark' ? 'text-neon-blue' : 'text-primary'}`} />
+                </div>
+                <p className="text-sm font-medium mb-1">No transactions yet</p>
+                <p className="text-xs text-muted-foreground">Your wallet activity will appear here</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column - Quick Actions & Stats */}
+        <div className={`p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 ${
+          theme === 'dark'
+            ? 'bg-black border-purple-500/20 hover:shadow-lg hover:shadow-purple-500/10'
+            : 'bg-card/90 border-purple-200 hover:shadow-lg'
+        }`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center">
+              <div className={`p-1 rounded ${theme === 'dark' ? 'bg-purple-500/20' : 'bg-purple-100'} mr-2`}>
+                <Zap className="h-3 w-3 text-purple-500" />
+              </div>
+              Quick Actions
+            </h3>
+          </div>
+          
+          <div className="space-y-3">
+            {/* Quick Action Buttons */}
+            <button
+              onClick={handleTopUp}
+              className={`w-full flex items-center justify-center space-x-2 p-3 rounded-lg border transition-all duration-200 hover:scale-[1.02] ${
+                theme === 'dark'
+                  ? 'border-neon-blue/30 hover:border-neon-blue/50 hover:bg-neon-blue/10 text-neon-blue'
+                  : 'border-primary/30 hover:border-primary/50 hover:bg-primary/10 text-primary'
+              }`}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="text-sm font-medium">Top Up Wallet</span>
+            </button>
+
+            <button
+              onClick={handleWithdraw}
+              className={`w-full flex items-center justify-center space-x-2 p-3 rounded-lg border transition-all duration-200 hover:scale-[1.02] ${
+                theme === 'dark'
+                  ? 'border-border/50 hover:border-gray-600 hover:bg-card/80 text-muted-foreground'
+                  : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700'
+              }`}
+            >
+              <ArrowUpRight className="h-4 w-4" />
+              <span className="text-sm font-medium">Withdraw Funds</span>
+            </button>
+
+            {/* Additional Stats */}
+            <div className="border-t border-border/50 pt-3 mt-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Total Spent</span>
+                  <span className="font-medium text-red-500">{formatCurrency(walletStatistics?.totalWithdrawn || 0)}</span>
+                </div>
+                <div className={`h-1 rounded-full ${theme === 'dark' ? 'bg-red-500/30' : 'bg-red-200'}`}>
+                  <div className="h-1 bg-red-500 rounded-full w-1/4"></div>
                 </div>
               </div>
-            ))
-          ) : (
-            <div className="p-12 text-center">
-              <Wallet className={`h-12 w-12 mx-auto mb-4 ${theme === 'dark' ? 'text-gray-600' : 'text-gray-400'}`} />
-              <p className="text-lg font-medium mb-2">No transactions yet</p>
-              <p className="text-muted-foreground">Your wallet activity will appear here</p>
             </div>
-          )}
-        </div>
-        
-        <div className="p-6 border-t border-border">
-          <button className={`w-full py-2 px-4 rounded-lg border transition-colors ${
-            theme === 'dark'
-              ? 'border-gray-600 hover:bg-gray-800 text-gray-300'
-              : 'border-gray-300 hover:bg-gray-50 text-gray-700'
-          }`}>
-            View All Transactions
-          </button>
+          </div>
         </div>
       </div>
-
     </div>
   );
 }

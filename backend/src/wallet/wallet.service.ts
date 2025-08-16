@@ -29,12 +29,21 @@ export class WalletService {
     userId: string,
     page: number = 1,
     limit: number = 20,
+    kind?: string,
   ) {
     const skip = (page - 1) * limit;
 
+    // Build the where clause
+    const where: any = { accountUserId: userId };
+    
+    // Add kind filter if provided
+    if (kind && kind !== 'all') {
+      where.kind = kind.toUpperCase() as LedgerKind;
+    }
+
     const [ledger, total] = await Promise.all([
       this.prisma.balanceLedger.findMany({
-        where: { accountUserId: userId },
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -47,18 +56,16 @@ export class WalletService {
         },
       }),
       this.prisma.balanceLedger.count({
-        where: { accountUserId: userId },
+        where,
       }),
     ]);
 
     return {
       data: ledger,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 
@@ -152,4 +159,5 @@ export class WalletService {
       });
     }
   }
+
 }

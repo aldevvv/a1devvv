@@ -109,8 +109,9 @@ pnpm run build
 cd ..
 ```
 
-### Create PM2 ecosystem file
+### Create PM2 ecosystem file (di folder project utama)
 ```bash
+cd /root/a1devvv
 nano ecosystem.config.js
 ```
 
@@ -119,7 +120,7 @@ module.exports = {
   apps: [
     {
       name: 'a1dev-backend',
-      cwd: '/root/a1dev/backend',
+      cwd: '/root/a1devvv/backend',
       script: 'dist/main.js',
       env: { NODE_ENV: 'production', PORT: 4000 },
       instances: 1,
@@ -129,8 +130,8 @@ module.exports = {
     },
     {
       name: 'a1dev-frontend',
-      cwd: '/root/a1dev/frontend',
-      script: 'node_modules/next/dist/bin/next',
+      cwd: '/root/a1devvv/frontend',
+      script: 'npm',
       args: 'start',
       env: { NODE_ENV: 'production', PORT: 3000 },
       instances: 1,
@@ -142,8 +143,9 @@ module.exports = {
 };
 ```
 
-### Start with PM2
+### Start with PM2 (dari folder project utama)
 ```bash
+cd /root/a1devvv
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
@@ -240,14 +242,15 @@ A    api    YOUR_VPS_IP
 
 ## 8. Easy Deploy Script
 
-### Create update script
+### Create update script (di folder project utama)
 ```bash
-nano /root/a1dev/deploy.sh
+cd /root/a1devvv
+nano deploy.sh
 ```
 
 ```bash
 #!/bin/bash
-cd /root/a1dev
+cd /root/a1devvv
 git pull origin main
 pnpm install
 
@@ -266,7 +269,102 @@ echo "✅ Deployment completed!"
 ```
 
 ```bash
-chmod +x /root/a1dev/deploy.sh
+cd /root/a1devvv
+chmod +x deploy.sh
+```
+
+## 9. Handling Updates
+
+### Database Schema Updates
+
+When you have database schema changes:
+
+```bash
+cd /root/a1devvv
+git pull origin main
+
+# Generate new Prisma client and run migrations
+cd backend
+npx prisma generate
+npx prisma migrate deploy
+pnpm run build
+
+# Restart the backend service
+pm2 restart a1dev-backend
+```
+
+### Backend Code Updates
+
+When you only have backend code changes (no schema changes):
+
+```bash
+cd /root/a1devvv
+git pull origin main
+
+# Install any new dependencies
+pnpm install
+
+# Rebuild the backend
+cd backend
+pnpm run build
+
+# Restart the backend service
+pm2 restart a1dev-backend
+```
+
+### Frontend Code Updates
+
+When you only have frontend code changes:
+
+```bash
+cd /root/a1devvv
+git pull origin main
+
+# Install any new dependencies
+pnpm install
+
+# Rebuild the frontend
+cd frontend
+pnpm run build
+
+# Restart the frontend service
+pm2 restart a1dev-frontend
+```
+
+### Full Stack Updates
+
+When you have changes across the entire stack (frontend, backend, and database):
+
+```bash
+cd /root/a1devvv
+git pull origin main
+
+# Install any new dependencies
+pnpm install
+
+# Update database and rebuild backend
+cd backend
+npx prisma generate
+npx prisma migrate deploy
+pnpm run build
+cd ..
+
+# Rebuild frontend
+cd frontend
+pnpm run build
+cd ..
+
+# Restart all services
+pm2 restart all
+```
+
+### Database Seeding (if needed)
+
+If you need to seed the database with initial data:
+
+```bash
+cd /root/a1devvv/backend
+npx prisma db seed
 ```
 
 ## 🎉 Done!
@@ -276,7 +374,8 @@ Your A1Dev platform will be live at:
 - **API:** https://api.a1dev.id
 
 ### Quick Commands:
-- **Deploy updates:** `/root/a1dev/deploy.sh`
+- **Deploy updates:** `/root/a1devvv/deploy.sh`
 - **Check status:** `pm2 status`
 - **View logs:** `pm2 logs`
 - **Restart:** `pm2 restart all`
+- **Update database only:** `cd /root/a1devvv/backend && npx prisma migrate deploy`

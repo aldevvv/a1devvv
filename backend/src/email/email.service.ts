@@ -9,13 +9,16 @@ export class EmailService {
     this.resend = new Resend(process.env.RESEND_API_KEY!);
   }
 
-  async send(to: string, subject: string, html: string) {
+  async send(to: string, subject: string, html: string, from?: string) {
     if (!process.env.RESEND_API_KEY) {
       console.warn('RESEND_API_KEY not set, skipping email send.');
       return;
     }
+    
+    const senderEmail = from || process.env.EMAIL_FROM!;
+    
     await this.resend.emails.send({
-      from: process.env.EMAIL_FROM!,
+      from: senderEmail,
       to,
       subject,
       html,

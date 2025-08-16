@@ -36,18 +36,43 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const id = dto.email ? { email: dto.email } : { username: dto.username! };
-    const { accessToken, refreshToken, user } = await this.auth.login(id, dto.password, req.headers['user-agent'], req.ip);
+    const rememberMe = dto.rememberMe || false;
+    
+    const { accessToken, refreshToken, user } = await this.auth.login(id, dto.password, rememberMe, req.headers['user-agent'], req.ip);
+    
+    // Set cookies with appropriate expiration based on rememberMe
     res.cookie('access_token', accessToken, this.tokens.cookieOptionsAccess());
-    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh());
+    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh(rememberMe));
+    
     return { user: { id: user.id, fullName: user.fullName, email: user.email, username: user.username } };
   }
 
   @Post('refresh')
   async refresh(@Body() _dto: RefreshDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const rt = req.cookies?.['refresh_token'];
+    
+    // Get session info to preserve rememberMe setting
+    let rememberMe = false;
+    if (rt) {
+      try {
+        const decoded = await this.tokens.verifyRefresh(rt);
+        const session = await this.prisma.session.findFirst({
+          where: { 
+            refreshHash: require('crypto').createHash('sha256').update(rt).digest('hex'),
+            revokedAt: null, 
+            expiresAt: { gt: new Date() } 
+          },
+          select: { rememberMe: true }
+        });
+        rememberMe = session?.rememberMe || false;
+      } catch {
+        // If token verification fails, it will be handled by auth.refresh()
+      }
+    }
+    
     const { accessToken, refreshToken } = await this.auth.refresh(rt, req.headers['user-agent'], req.ip);
     res.cookie('access_token', accessToken, this.tokens.cookieOptionsAccess());
-    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh());
+    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh(rememberMe));
     return { ok: true };
   }
 
@@ -76,7 +101,17 @@ export class AuthController {
   async me(@CurrentUser() user: { id: string }) {
     const u = await this.prisma.user.findUnique({
       where: { id: user.id },
-      select: { id: true, fullName: true, email: true, username: true, emailVerifiedAt: true, role: true }
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        username: true,
+        emailVerifiedAt: true,
+        role: true,
+        profileImage: true,
+        googleId: true,
+        githubId: true
+      }
     });
     return { user: u };
   }
@@ -92,17 +127,19 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const user = req.user as any;
+    // OAuth flows default to rememberMe: false for security
     const { accessToken, refreshToken } = await this.auth.createTokensForUser(
       user.id,
+      false, // rememberMe defaults to false for OAuth
       req.headers['user-agent'],
       req.ip,
     );
     
     res.cookie('access_token', accessToken, this.tokens.cookieOptionsAccess());
-    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh());
+    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh(false));
     
-    // Redirect to frontend dashboard
-    res.redirect(`${process.env.FRONTEND_ORIGIN}/dashboard`);
+    // Redirect to frontend dashboard with OAuth success indicator
+    res.redirect(`${process.env.FRONTEND_ORIGIN}/dashboard?oauth=google`);
   }
 
   @Get('github')
@@ -115,16 +152,18 @@ export class AuthController {
   @UseGuards(AuthGuard('github'))
   async githubCallback(@Req() req: Request, @Res() res: Response) {
     const user = req.user as any;
+    // OAuth flows default to rememberMe: false for security
     const { accessToken, refreshToken } = await this.auth.createTokensForUser(
       user.id,
+      false, // rememberMe defaults to false for OAuth
       req.headers['user-agent'],
       req.ip,
     );
     
     res.cookie('access_token', accessToken, this.tokens.cookieOptionsAccess());
-    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh());
+    res.cookie('refresh_token', refreshToken, this.tokens.cookieOptionsRefresh(false));
     
-    // Redirect to frontend dashboard
-    res.redirect(`${process.env.FRONTEND_ORIGIN}/dashboard`);
+    // Redirect to frontend dashboard with OAuth success indicator
+    res.redirect(`${process.env.FRONTEND_ORIGIN}/dashboard?oauth=github`);
   }
 }

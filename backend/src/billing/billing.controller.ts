@@ -17,10 +17,13 @@ import { Transform } from 'class-transformer';
 
 class TopUpDto {
   @IsNumber()
-  @Min(10000, { message: 'Minimum top-up amount is IDR 10,000' })
+  @Min(5000, { message: 'Minimum top-up amount is IDR 5,000' })
   @Max(10000000, { message: 'Maximum top-up amount is IDR 10,000,000' })
   @Transform(({ value }) => {
     const num = Number(value);
+    if (isNaN(num)) {
+      throw new Error('Amount must be a valid number');
+    }
     return num;
   })
   amountIDR: number;

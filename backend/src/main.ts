@@ -5,7 +5,18 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    // Increase body size limit for file uploads
+    bodyParser: true,
+    rawBody: true,
+  });
+
+  // Configure body parsing limits for file uploads
+  app.use('/user/profile-image', (req: any, res: any, next: any) => {
+    // Increase limit for file upload endpoint specifically
+    req.setTimeout(60000); // 60 seconds timeout
+    next();
+  });
 
   // Security
   app.use(helmet({

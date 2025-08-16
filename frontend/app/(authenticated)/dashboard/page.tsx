@@ -3,6 +3,8 @@
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 
 // Mock data for dashboard
 const mockStats = {
@@ -270,20 +272,227 @@ function TaskRow({ task }: { task: typeof mockRecentTasks[0] }) {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const searchParams = useSearchParams();
   
   useEffect(() => setMounted(true), []);
+  
+  // Handle OAuth completion
+  useEffect(() => {
+    const oauthProvider = searchParams.get('oauth');
+    if (oauthProvider && mounted) {
+      // Force refresh user data after OAuth authentication
+      refreshUser().then(() => {
+        // Show success message
+        const providerName = oauthProvider === 'google' ? 'Google' : 'GitHub';
+        toast.success(`Successfully signed in with ${providerName}!`, {
+          description: 'Your profile has been updated with your OAuth information.',
+        });
+        
+        // Clean up URL parameter
+        const url = new URL(window.location.href);
+        url.searchParams.delete('oauth');
+        window.history.replaceState({}, '', url.toString());
+      });
+    }
+  }, [mounted, searchParams, refreshUser]);
   
   if (!mounted) {
     return (
       <div className="space-y-6">
-        <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className={`h-8 w-48 rounded animate-pulse mb-2 ${
+              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+            }`}></div>
+            <div className={`h-4 w-64 rounded animate-pulse ${
+              theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+            }`}></div>
+          </div>
+          <div className={`h-10 w-32 rounded animate-pulse ${
+            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+          }`}></div>
+        </div>
+        
+        {/* Stats Grid skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 bg-gray-200 rounded animate-pulse"></div>
+            <div key={i} className={`rounded-lg border p-6 transition-all duration-200 ${
+              theme === 'dark'
+                ? 'bg-gray-900 border-gray-800'
+                : 'bg-white border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className={`h-4 w-24 rounded animate-pulse mb-3 ${
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  }`}></div>
+                  <div className={`h-8 w-16 rounded animate-pulse ${
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  }`}></div>
+                </div>
+                <div className={`h-8 w-8 rounded animate-pulse ${
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                }`}></div>
+              </div>
+              <div className={`h-4 w-20 rounded animate-pulse mt-4 ${
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              }`}></div>
+            </div>
           ))}
+        </div>
+        
+        {/* Content Grid skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Projects skeleton */}
+          <div className={`rounded-lg border p-6 ${
+            theme === 'dark'
+              ? 'bg-gray-900 border-gray-800'
+              : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <div className={`h-6 w-32 rounded animate-pulse ${
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              }`}></div>
+              <div className={`h-4 w-20 rounded animate-pulse ${
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              }`}></div>
+            </div>
+            
+            <div className="space-y-4">
+              {[...Array(4)].map((_, j) => (
+                <div key={j} className={`p-4 rounded-lg border transition-all duration-200 ${
+                  theme === 'dark'
+                    ? 'bg-gray-800 border-gray-700'
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`h-5 w-40 rounded animate-pulse ${
+                      theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                    }`}></div>
+                    <div className={`h-6 w-20 rounded-full animate-pulse ${
+                      theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                    }`}></div>
+                  </div>
+                  <div className={`h-4 w-32 rounded animate-pulse mb-3 ${
+                    theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                  }`}></div>
+                  <div className={`h-2 w-full rounded-full animate-pulse mb-3 ${
+                    theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                  }`}></div>
+                  <div className="flex items-center justify-between">
+                    <div className={`h-4 w-24 rounded animate-pulse ${
+                      theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                    }`}></div>
+                    <div className={`h-4 w-16 rounded animate-pulse ${
+                      theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                    }`}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Recent Tasks skeleton */}
+          <div className={`rounded-lg border p-6 ${
+            theme === 'dark'
+              ? 'bg-gray-900 border-gray-800'
+              : 'bg-white border-gray-200'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <div className={`h-6 w-32 rounded animate-pulse ${
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              }`}></div>
+              <div className={`h-4 w-20 rounded animate-pulse ${
+                theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+              }`}></div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className={`border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+                    {['Task', 'Priority', 'Status', 'Assignee', 'Due'].map((header, i) => (
+                      <th key={i} className="text-left px-4 py-3">
+                        <div className={`h-4 w-16 rounded animate-pulse ${
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}></div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...Array(4)].map((_, k) => (
+                    <tr key={k} className={`border-b ${
+                      theme === 'dark'
+                        ? 'border-gray-800'
+                        : 'border-gray-200'
+                    }`}>
+                      <td className="px-4 py-3">
+                        <div className={`h-4 w-32 rounded animate-pulse mb-2 ${
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}></div>
+                        <div className={`h-3 w-24 rounded animate-pulse ${
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}></div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className={`h-4 w-16 rounded animate-pulse ${
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}></div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className={`h-6 w-20 rounded-full animate-pulse ${
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}></div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className={`h-4 w-16 rounded animate-pulse ${
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}></div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className={`h-4 w-20 rounded animate-pulse ${
+                          theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                        }`}></div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        {/* Quick Actions skeleton */}
+        <div className={`rounded-lg border p-6 ${
+          theme === 'dark'
+            ? 'bg-gray-900 border-gray-800'
+            : 'bg-white border-gray-200'
+        }`}>
+          <div className={`h-6 w-32 rounded animate-pulse mb-4 ${
+            theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+          }`}></div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[...Array(6)].map((_, l) => (
+              <div key={l} className={`p-4 rounded-lg border text-center ${
+                theme === 'dark'
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className={`h-8 w-8 rounded animate-pulse mb-2 mx-auto ${
+                  theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                }`}></div>
+                <div className={`h-4 w-16 rounded animate-pulse mx-auto ${
+                  theme === 'dark' ? 'bg-gray-600' : 'bg-gray-200'
+                }`}></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );

@@ -10,6 +10,9 @@ interface User {
   username: string;
   emailVerifiedAt: string | null;
   role: 'USER' | 'ADMIN';
+  profileImage?: string | null;
+  googleId?: string | null;
+  githubId?: string | null;
 }
 
 interface AuthContextType {

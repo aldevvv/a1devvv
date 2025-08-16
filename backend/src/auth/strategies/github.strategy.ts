@@ -32,7 +32,7 @@ export class GitHubStrategy extends PassportStrategy(Strategy, 'github') {
     done: any,
   ): Promise<any> {
     try {
-      const { id, displayName, emails } = profile;
+      const { id, displayName, emails, photos } = profile;
       const email = emails?.[0]?.value;
       
       if (!email) {
@@ -41,15 +41,27 @@ export class GitHubStrategy extends PassportStrategy(Strategy, 'github') {
       
       const fullName = displayName || profile.username || 'GitHub User';
       
+      // Extract profile picture URL with better fallbacks
+      let profileImage: string | undefined = undefined;
+      if (photos && photos.length > 0 && photos[0].value) {
+        profileImage = photos[0].value;
+      } else if (profile._json?.avatar_url) {
+        profileImage = profile._json.avatar_url;
+      }
+      
+      // OAuth profile processing completed
+      
       const user = await this.authService.findOrCreateOAuthUser({
         provider: 'github',
         providerId: id,
         email,
         fullName,
+        profileImage,
       });
       
       done(null, user);
     } catch (error) {
+      console.error('GitHub OAuth validation error:', error);
       done(error, false);
     }
   }

@@ -165,7 +165,7 @@ export class BillingService {
     });
 
     // If payment is settled, add to wallet
-    if (newStatus === PaymentStatus.SETTLEMENT) {
+    if (newStatus === PaymentStatus.SETTLED) {
       await this.walletService.addLedgerEntry(
         payment.userId,
         payment.grossIDR,
@@ -198,7 +198,7 @@ export class BillingService {
     await this.prisma.payment.update({
       where: { id: paymentId },
       data: {
-        status: PaymentStatus.SETTLEMENT,
+        status: PaymentStatus.SETTLED,
         raw: { approvedBy: adminUserId, approvedAt: new Date() },
       },
     });
@@ -305,7 +305,7 @@ export class BillingService {
         });
 
         // If payment is settled, add to wallet
-        if (newStatus === PaymentStatus.SETTLEMENT) {
+        if (newStatus === PaymentStatus.SETTLED) {
           console.log('Payment settled, adding to wallet:', {
             userId: payment.userId,
             amount: payment.grossIDR,
@@ -349,16 +349,16 @@ export class BillingService {
   }
 
   private validateAmount(amountIDR: number) {
-    if (!amountIDR || amountIDR < 10000) {
-      throw new BadRequestException('Minimum top-up amount is IDR 10,000');
+    if (!amountIDR || amountIDR < 5000) {
+      throw new BadRequestException('Minimum top-up amount is IDR 5,000');
     }
     if (amountIDR > 10000000) {
       throw new BadRequestException('Maximum top-up amount is IDR 10,000,000');
     }
-    // Remove strict validation for multiples of 1000 since frontend handles this
-    // if (amountIDR % 1000 !== 0) {
-    //   throw new BadRequestException('Amount must be a multiple of IDR 1,000');
-    // }
+    // Ensure amount is a whole number
+    if (!Number.isInteger(amountIDR)) {
+      throw new BadRequestException('Amount must be a whole number');
+    }
   }
 
   private generateOrderId(prefix: string): string {

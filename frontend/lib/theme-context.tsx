@@ -13,7 +13,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setTheme] = useState<Theme>('dark'); // Default to dark to match script
 
   useEffect(() => {
     // Check localStorage first, then system preference
@@ -21,9 +21,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
     const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
-    setTheme(initialTheme);
     
-    // Apply theme to document
+    // Only set theme if it's different from current to avoid unnecessary re-renders
+    if (theme !== initialTheme) {
+      setTheme(initialTheme);
+    }
+    
+    // Ensure theme is applied to document (in case script failed)
     document.documentElement.setAttribute('data-theme', initialTheme);
   }, []);
 

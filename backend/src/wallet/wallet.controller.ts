@@ -23,6 +23,7 @@ export class WalletController {
     @CurrentUser() user: { id: string },
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('kind') kind?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
@@ -31,6 +32,7 @@ export class WalletController {
       user.id,
       pageNum > 0 ? pageNum : 1,
       limitNum > 0 && limitNum <= 100 ? limitNum : 20,
+      kind,
     );
   }
 }
