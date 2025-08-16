@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { Activity, Shield, Users, Database, Trash2, RefreshCw, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -29,7 +29,6 @@ export default function SessionsPage() {
   const [loading, setLoading] = useState(true);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [lastCleanup, setLastCleanup] = useState<CleanupResult | null>(null);
-  const { toast } = useToast();
 
   // Fetch session statistics
   const fetchStats = async () => {
@@ -48,11 +47,7 @@ export default function SessionsPage() {
       setStats(data);
     } catch (error) {
       console.error('Error fetching stats:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch session statistics',
-        variant: 'destructive',
-      });
+      toast.error('Failed to fetch session statistics');
     } finally {
       setLoading(false);
     }
@@ -74,20 +69,13 @@ export default function SessionsPage() {
       const result = await response.json();
       setLastCleanup(result);
       
-      toast({
-        title: 'Cleanup Successful',
-        description: `Deleted ${result.sessionsDeleted} sessions and ${result.tokensDeleted} tokens`,
-      });
+      toast.success(`Cleanup successful! Deleted ${result.sessionsDeleted} sessions and ${result.tokensDeleted} tokens`);
 
       // Refresh stats after cleanup
       await fetchStats();
     } catch (error) {
       console.error('Error during cleanup:', error);
-      toast({
-        title: 'Cleanup Failed',
-        description: 'Failed to cleanup expired data',
-        variant: 'destructive',
-      });
+      toast.error('Failed to cleanup expired data');
     } finally {
       setCleanupLoading(false);
     }

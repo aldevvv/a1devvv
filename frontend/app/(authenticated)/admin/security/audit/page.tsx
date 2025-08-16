@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { FileText, AlertTriangle, Clock, CheckCircle, RefreshCw, Search, Filter, Eye, User, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -51,7 +51,6 @@ export default function AuditLogsPage() {
     userId: '',
     limit: 50
   });
-  const { toast } = useToast();
 
   // Fetch audit logs
   const fetchLogs = async () => {
@@ -75,11 +74,7 @@ export default function AuditLogsPage() {
       setLogs(data.logs || []);
     } catch (error) {
       console.error('Error fetching logs:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch audit logs',
-        variant: 'destructive',
-      });
+      toast.error('Failed to fetch audit logs');
     } finally {
       setLoading(false);
     }
