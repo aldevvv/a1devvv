@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerAuth } from '@/lib/auth';
 import { checkAdminRateLimit } from '@/lib/admin-rate-limiter';
 import { z } from 'zod';
 
@@ -20,9 +19,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await getServerAuth(request);
     
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!authResult.user || authResult.user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Unauthorized. Admin access required.' },
         { status: 401 }
@@ -81,9 +80,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await getServerAuth(request);
     
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!authResult.user || authResult.user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Unauthorized. Admin access required.' },
         { status: 401 }
@@ -91,7 +90,7 @@ export async function PATCH(
     }
 
     // Check rate limit
-    const rateLimitResult = await checkAdminRateLimit(request, session.user.email!);
+    const rateLimitResult = await checkAdminRateLimit(request, authResult.user.email);
     if (!rateLimitResult.allowed) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please try again later.' },
@@ -163,7 +162,7 @@ export async function PATCH(
     });
 
     // Log the admin action (optional - you can implement audit logging)
-    console.log(`Admin ${session.user.email} updated contact submission ${id}:`, {
+    console.log(`Admin ${authResult.user.email} updated contact submission ${id}:`, {
       changes: updateData,
       timestamp: new Date().toISOString()
     });
@@ -188,9 +187,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await getServerAuth(request);
     
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!authResult.user || authResult.user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Unauthorized. Admin access required.' },
         { status: 401 }
@@ -198,7 +197,7 @@ export async function DELETE(
     }
 
     // Check rate limit for destructive operations
-    const rateLimitResult = await checkAdminRateLimit(request, session.user.email!);
+    const rateLimitResult = await checkAdminRateLimit(request, authResult.user.email);
     if (!rateLimitResult.allowed) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please try again later.' },
@@ -241,7 +240,7 @@ export async function DELETE(
     });
 
     // Log the admin action
-    console.log(`Admin ${session.user.email} deleted contact submission ${id}:`, {
+    console.log(`Admin ${authResult.user.email} deleted contact submission ${id}:`, {
       submissionEmail: existingSubmission.email,
       submissionSubject: existingSubmission.subject,
       timestamp: new Date().toISOString()

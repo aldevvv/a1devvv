@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getServerAuth } from '@/lib/auth';
 import { checkAdminRateLimit } from '@/lib/admin-rate-limiter';
 
 const prisma = new PrismaClient();
@@ -9,9 +8,9 @@ const prisma = new PrismaClient();
 // GET /api/admin/contact-submissions - List contact submissions with pagination and filtering
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const authResult = await getServerAuth(request);
     
-    if (!session?.user || session.user.role !== 'ADMIN') {
+    if (!authResult.user || authResult.user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Unauthorized. Admin access required.' },
         { status: 401 }
@@ -19,7 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check rate limit
-    const rateLimitResult = await checkAdminRateLimit(request, session.user.email!);
+    const rateLimitResult = await checkAdminRateLimit(request, authResult.user.email);
     if (!rateLimitResult.allowed) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please try again later.' },
